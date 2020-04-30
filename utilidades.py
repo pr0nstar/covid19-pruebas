@@ -18,7 +18,7 @@ def run(model_fn, model_data, days, acc_days=0,  step=0.1, **params):
             if type(params_t[key]) == list:
                 params_t[key] = params_t[key][point_idx]
 
-        steps = np.arange(start=acc_days, stop=acc_days + point_days, step=step)
+        steps = np.arange(start=acc_days, stop=acc_days + point_days + 1, step=step)
         solution = scipy.integrate.solve_ivp(
             lambda _, model_data_t: model_fn(model_data_t, **params_t),
             y0 = model_data,
@@ -31,10 +31,15 @@ def run(model_fn, model_data, days, acc_days=0,  step=0.1, **params):
 
         if not final_solution:
             final_solution = solution
+            final_solution['t'] = final_solution['t'][:-1]
+            final_solution['y'] = [solution_y[:-1] for solution_y in final_solution['y']]
+
         else:
-            final_solution['t'] = np.append(final_solution['t'], solution['t'])
+            final_solution['t'] = np.append(final_solution['t'][:-1], solution['t'])
             final_solution['y'] = [
-                np.append(final_solution['y'][idx], solution_y) for idx, solution_y in enumerate(solution['y'])
+                np.append(
+                    final_solution['y'][idx][:-1], solution_y
+                ) for idx, solution_y in enumerate(solution['y'])
             ]
 
     return final_solution
