@@ -92,4 +92,4 @@ def load_data():
         data = np.flip(data) + np.diff(final_data[1], prepend=[final_data[1][0]])
         final_data.append(data)
 
-    return final_data
+    return np.array(final_data)
