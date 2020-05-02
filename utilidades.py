@@ -45,7 +45,7 @@ def run(model_fn, model_data, days, acc_days=0,  step=0.1, **params):
     return final_solution
 
 
-pyplot.rcParams['figure.figsize'] = [50/2.54, 22/2.54]
+pyplot.rcParams['figure.figsize'] = [40/2.54, 20/2.54]
 def plot(x, *curves, **kwargs):
     fig, ax = pyplot.subplots()
     for idx, curve in enumerate(curves):
