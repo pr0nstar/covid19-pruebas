@@ -65,13 +65,24 @@ def load_data():
 
     with open('./data/covid19-bolivia2/nacional.csv') as f:
         csv_file = csv.reader(f)
-        data = [[int(_) for _ in line[1:]] for idx, line in enumerate(csv_file) if idx > 0]
+        data = [
+            [
+                int(_.replace('.', '')) for _ in line[1:]
+            ] for idx, line in enumerate(csv_file) if idx > 0
+        ]
+        active_cases = np.array([_[0] - sum(_[1:]) for _ in data])
+        data = [np.array(_) for _ in zip(*data)]
+        data.insert(0, active_cases)
 
-        final_data.extend(zip(*data))
+        final_data.extend(data)
 
     with open('./data/covid19-bolivia/descartados.csv') as f:
         csv_file = csv.reader(f)
-        data = [[int(_) for _ in line[1:]] for idx, line in enumerate(csv_file) if idx > 0]
+        data = [
+            [
+                int(_.replace('.', '')) for _ in line[1:]
+            ] for idx, line in enumerate(csv_file) if idx > 0
+        ]
         data = [sum(_) for _ in data]
         data = np.pad(data, (0, 12), 'constant', constant_values=(0,))
         data = np.array([data[_] - data[_ + 1] for _ in range(len(data) - 1)], dtype='float64')
