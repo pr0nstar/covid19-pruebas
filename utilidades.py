@@ -62,7 +62,7 @@ def estimate_rt(
     '''
     if infectivity_profile is None:
         infectivity_profile = np.append(np.arange(0, 4) / 3., [
-            1., 1., *np.arange(5, -1, -1) / 5.
+            1., *np.arange(5, -1, -1) / 5.
         ])
         infectivity_profile = infectivity_profile / sum(infectivity_profile)
 
@@ -115,6 +115,9 @@ def estimate_rt(
     if window_size > 0:
         r_ts = moving_average(r_ts, window_size)
         r_ts_err = moving_average(r_ts_err, window_size)
+
+    r_ts = r_ts[:-1]
+    r_ts_err = r_ts_err[:-1]
 
     return r_ts, r_ts - qnorm * r_ts_err, r_ts + qnorm * r_ts_err
 
@@ -252,14 +255,9 @@ def describe_simulation(
     else:
         population = params_dict['population']
 
-    draw_curve_inflection(
-        100. * solution_dict['susceptible'] / population,
-        label = 'Susceptibles (%)',
-        ax = axs[0][0]
-    )
     ax = draw_curve_inflection(
-        100. * solution_dict['infected'] / population,
-        label='Infectados (%)',
+        100. * (solution_dict['infected'] - solution_dict['exposed']) / population,
+        label='Infecciosos (%)',
         ax = axs[0][1],
         direction = 'v'
     )
@@ -267,11 +265,17 @@ def describe_simulation(
     ax.fill_between(
         range(len(solution_dict['infected'])),
         [0] * len(solution_dict['infected']),
-        100. * (solution_dict['infected'] + solution_dict['exposed']) / population,
+        100. * solution_dict['infected'] / population,
         alpha=0.1,
-        label='E + I'
+        label='I + E'
     )
     ax.legend(loc='upper left')
+
+    draw_curve_inflection(
+        100. * solution_dict['susceptible'] / population,
+        label = 'Susceptibles (%)',
+        ax = axs[0][0]
+    )
 
     draw_curve_inflection(
         100. * solution_dict['recovered'] / population,
@@ -317,6 +321,20 @@ def describe_simulation(
         )
 
     return axs
+
+def phase_transition(solution, population_t0, ax = None):
+    ax = draw_curve_inflection(
+        100. * solution['susceptible'] / population_t0,
+        100. * solution['infected'] / population_t0,
+        direction = 'v',
+        ax = ax
+    )
+    ax.set_xlim(left=0)
+    ax.set_ylim(bottom=0)
+    ax.set_title('Diagrama de fase')
+    ax.set(xlabel='Susceptibles (%)', ylabel='Infectados (%)')
+
+    return ax
 
 # https://github.com/mauforonda
 def load_data():
