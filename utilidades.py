@@ -2,6 +2,7 @@ import csv
 import numpy as np
 import scipy
 import scipy.integrate
+import scipy.stats
 
 from matplotlib import pyplot
 
@@ -62,11 +63,14 @@ def estimate_rt(
     '''
     if infectivity_profile is None:
         infectivity_profile = np.append(np.arange(0, 4) / 3., [
-            1., *np.arange(5, -1, -1) / 5.
+            *np.arange(5, -1, -1) / 5.
         ])
         infectivity_profile = infectivity_profile / sum(infectivity_profile)
 
     res = []
+
+    if window_size > 0:
+        new_cases = moving_average(new_cases, window_size)
 
     for idx in range(int(periodo_incubacion) + 1, len(new_cases) - 1):
         cases = new_cases[:idx]
@@ -112,12 +116,7 @@ def estimate_rt(
 
     qnorm = scipy.stats.norm.ppf(1 - 0.05 / 2)
 
-    if window_size > 0:
-        r_ts = moving_average(r_ts, window_size)
-        r_ts_err = moving_average(r_ts_err, window_size)
-
-    r_ts = r_ts[:-1]
-    r_ts_err = r_ts_err[:-1]
+    r_ts, r_ts_err = r_ts[:-1], r_ts_err[:-1]
 
     return r_ts, r_ts - qnorm * r_ts_err, r_ts + qnorm * r_ts_err
 
@@ -288,10 +287,7 @@ def describe_simulation(
         ax = axs[1][1]
     )
 
-    new_cases = np.diff(
-        solution_dict['infected'] + solution_dict['exposed'],
-        prepend=[solution_dict['infected'][0]]
-    )
+    new_cases = solution_dict['new_cases']
     _, ax = draw_effective_rts(
         new_cases,
         ax=axs[2][0],
