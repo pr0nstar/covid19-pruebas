@@ -27,7 +27,7 @@ def run(model_fn, model_data, days, acc_days=0,  step=0.1, **params):
             t_span = (acc_days, acc_days + point_days)
         )
 
-        model_data = [_[-2] for _ in solution['y']]
+        model_data = [_[-1] for _ in solution['y']]
         acc_days = acc_days + point_days
 
         if not final_solution:
@@ -46,11 +46,12 @@ def run(model_fn, model_data, days, acc_days=0,  step=0.1, **params):
     return final_solution
 
 def moving_average(arr, by):
+    pad = int(by / 2)
     return np.convolve(
-        np.pad(arr, (0, 1), 'edge'),
+        np.pad(arr, (0, pad), 'edge'),
         np.ones((by,)) / by,
         mode='same'
-    )[:-1]
+    )[:-pad]
 
 def estimate_rt(
     new_cases,
