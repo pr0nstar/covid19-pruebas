@@ -1,9 +1,13 @@
-import csv
 import numpy as np
 import scipy
 import scipy.integrate
 import scipy.stats
 
+import csv
+import os.path
+import urllib.request
+
+import matplotlib
 from matplotlib import pyplot
 
 
@@ -19,29 +23,31 @@ def run(model_fn, model_data, days, acc_days=0,  step=0.1, **params):
             if type(params_t[key]) == list:
                 params_t[key] = params_t[key][point_idx]
 
-        steps = np.arange(start=acc_days, stop=acc_days + point_days + 1, step=step)
+        to_time = acc_days + point_days + int(bool(point_idx))
+        steps = np.arange(start=acc_days, stop=to_time, step=step)
+
         solution = scipy.integrate.solve_ivp(
             lambda _, model_data_t: model_fn(model_data_t, **params_t),
             y0 = model_data,
             t_eval = steps,
-            t_span = (acc_days, acc_days + point_days)
+            t_span = (acc_days, to_time)
         )
-
-        model_data = [_[-1] for _ in solution['y']]
-        acc_days = acc_days + point_days
 
         if not final_solution:
             final_solution = solution
-            final_solution['t'] = final_solution['t'][:-1]
-            final_solution['y'] = [solution_y[:-1] for solution_y in final_solution['y']]
+            # final_solution['t'] = final_solution['t']
+            # final_solution['y'] = [solution_y for solution_y in final_solution['y']]
 
         else:
-            final_solution['t'] = np.append(final_solution['t'][:-1], solution['t'])
+            final_solution['t'] = np.append(final_solution['t'], solution['t'][1:])
             final_solution['y'] = [
                 np.append(
-                    final_solution['y'][idx][:-1], solution_y
+                    final_solution['y'][idx], solution_y[1:]
                 ) for idx, solution_y in enumerate(solution['y'])
             ]
+
+        model_data = [_[-1] for _ in solution['y']]
+        acc_days = to_time - 1
 
     return final_solution
 
@@ -73,7 +79,7 @@ def estimate_rt(
     if window_size > 0:
         new_cases = moving_average(new_cases, window_size)
 
-    for idx in range(int(periodo_incubacion) + 1, len(new_cases) - 1):
+    for idx in range(int(periodo_incubacion) + 1, len(new_cases)):
         cases = new_cases[:idx]
         difference = len(cases) - len(infectivity_profile)
 
@@ -90,8 +96,8 @@ def estimate_rt(
 
         tau = max(1., np.sum(cases * profile))
         res.append((
-            new_cases[idx + 1] / tau,
-            new_cases[idx + 1] / tau ** 2
+            new_cases[idx] / tau,
+            new_cases[idx] / tau ** 2
         ))
 
     r_ts, r_ts_err = zip(*res)
@@ -135,14 +141,14 @@ def plot(x, *curves, **kwargs):
 
     return ax
 
-def plot_moving_averaged(x, y = None, label = None):
+def plot_moving_averaged(x, y = None, label = None, window_size = 4):
     if not y:
         y = x
         x = range(len(y))
 
     fig, ax = pyplot.subplots()
     ax.stem(x, y, label=label)
-    ax.plot(moving_average(y, 4))
+    ax.plot(moving_average(y, window_size), color='darkblue')
 
     pyplot.grid(b=True, color='DarkTurquoise', alpha=0.2, linestyle=':', linewidth=2)
     if label:
@@ -333,6 +339,32 @@ def phase_transition(solution, population_t0, ax = None):
 
     return ax
 
+# https://muywaso.com/especial-de-datos-muy-waso-sobre-el-coronavirus-en-bolivia/
+def load_testing_data():
+    PATH = './data/testing.muywaso.csv'
+    URL = 'https://app.flourish.studio/api/data_table/3987481/csv'
+
+    if not os.path.isfile(PATH):
+        response = urllib.request.urlopen(URL)
+        data = response.read().decode('utf-8')
+
+        with open(PATH, 'w') as f:
+            f.write(data)
+
+    data = []
+
+    with open(PATH) as f:
+        csv_file = csv.reader(f)
+        data = [
+            [
+                int(_.replace('.', '')) if _ else 0 for _ in line[1:]
+            ] for idx, line in enumerate(csv_file) if idx > 0
+        ]
+        data = [sum(_) for _ in data]
+        data = np.pad(data, (11, 0), 'constant', constant_values=(0,))
+
+    return data
+
 # https://github.com/mauforonda
 def load_data():
     final_data = []
@@ -350,32 +382,14 @@ def load_data():
 
         final_data.extend(data)
 
-    with open('./data/covid19-bolivia/descartados.csv') as f:
-        csv_file = csv.reader(f)
-        data = [
-            [
-                int(_.replace('.', '')) for _ in line[1:]
-            ] for idx, line in enumerate(csv_file) if idx > 0
-        ]
-        data = [sum(_) for _ in data]
-        data = np.pad(data, (0, 12), 'constant', constant_values=(0,))
-        data = np.array([data[_] - data[_ + 1] for _ in range(len(data) - 1)], dtype='float64')
-
-        # No hay una forma mas facil?
-        zeros = np.flatnonzero(data == 0)
-        zeros_counts = np.diff(np.flatnonzero(np.concatenate(
-            ([True], (zeros[1:] - 1) != zeros[:-1], [True])
-        )))
-
-        acc = 0
-        for zero_count in zeros_counts:
-            pos = zeros[acc]
-            if pos > 0:
-                data[pos - 1:pos + zero_count] = data[pos - 1] / (zero_count + 1.)
-            acc = acc + zero_count
-
-        data = np.flip(data) + np.diff(final_data[1], prepend=[final_data[1][0]])
-        final_data.append(data)
+    data = load_testing_data()
+    data = np.pad(
+        data,
+        (0, len(final_data[0]) - len(data)),
+        'constant',
+        constant_values=(0,)
+    )
+    final_data.append(data)
 
     return np.array(final_data)
 
