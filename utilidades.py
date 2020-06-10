@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import scipy
 import scipy.integrate
 import scipy.stats
@@ -6,6 +7,7 @@ import scipy.stats
 import csv
 import os.path
 import urllib.request
+import itertools as it
 
 import matplotlib
 from matplotlib import pyplot
@@ -79,6 +81,10 @@ def estimate_rt(
     if window_size > 0:
         new_cases = moving_average(new_cases, window_size)
 
+    new_cases = new_cases.tolist()
+    new_cases.append(0)
+    new_cases = np.array(new_cases)
+    
     for idx in range(int(periodo_incubacion) + 1, len(new_cases)):
         cases = new_cases[:idx]
         difference = len(cases) - len(infectivity_profile)
@@ -427,3 +433,75 @@ def load_data_jhu(country):
     final_data.insert(0, active_cases)
 
     return np.array(final_data)
+
+# https://www.ine.gob.bo/index.php/censos-y-proyecciones-de-poblacion-sociales/
+def load_population_data(resolution):
+    csv_file = csv.reader(open('./data/bolivia.population.final.csv'))
+    data = filter(lambda _: _[3], csv_file)
+
+    population_data = {}
+    for group_key, group in it.groupby(data, key=lambda _: _[resolution]):
+        group_data = population_data[group_key] = {
+            'zones': [],
+            'weights': [],
+            'total': 0
+        }
+        for element in group:
+            group_data['zones'].append(element[3])
+            group_data['weights'].append(int(element[4]))
+            group_data['total'] = group_data['total'] + int(element[4])
+
+
+        group_data['weights'] = np.array(group_data['weights']) / group_data['total']
+
+    return population_data
+
+# https://data.humdata.org/dataset/movement-range-maps
+def load_mobility_data(resolution = 0):
+    mobility_data = {}
+
+    csv_file = csv.reader(open('./data/facebook-mobility.bol.txt'), delimiter='\t')
+    data = list(csv_file)
+
+    for zone_key, group in it.groupby(data, key=lambda _: _[3]):
+        data = []
+        for element in group:
+            data.append(
+                (element[0], float(element[5]), float(element[6]))
+            )
+
+        if len(data) > 30:
+            mobility_data[zone_key] = data
+
+    vtc = pd.DataFrame()
+    stc = pd.DataFrame()
+    population_data = load_population_data(resolution)
+
+    for group_key, group in population_data.items():
+        group_data = []
+        for idx in range(len(group['zones'])):
+            zone_key = group['zones'][idx]
+            if zone_key not in mobility_data:
+                continue
+
+            dates, visited_tiles_change, single_tile_ratio = zip(
+                *mobility_data[zone_key]
+            )
+            weight = group['weights'][idx]
+
+            group_data.extend(
+                zip(
+                    dates,
+                    np.array(visited_tiles_change) * weight,
+                    np.array(single_tile_ratio) * weight
+                )
+            )
+
+        group_data = pd.DataFrame(group_data)
+        group_data.columns = 'date', 'visited_tiles_change', 'single_tile_ratio'
+
+        group_data = group_data.groupby('date').sum()
+        vtc[group_key] = group_data['visited_tiles_change']
+        stc[group_key] = group_data['single_tile_ratio']
+
+    return vtc, stc
