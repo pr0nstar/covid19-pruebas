@@ -8,6 +8,7 @@ import csv
 import os.path
 import urllib.request
 import itertools as it
+import unicodedata
 
 import matplotlib
 from matplotlib import pyplot
@@ -84,7 +85,7 @@ def estimate_rt(
     new_cases = new_cases.tolist()
     new_cases.append(0)
     new_cases = np.array(new_cases)
-    
+
     for idx in range(int(periodo_incubacion) + 1, len(new_cases)):
         cases = new_cases[:idx]
         difference = len(cases) - len(infectivity_profile)
@@ -345,8 +346,19 @@ def phase_transition(solution, population_t0, ax = None):
 
     return ax
 
+def do_read_csv(file_name):
+    with open(file_name) as f:
+        return list(csv.reader(f))
+
+def do_process_label(label):
+    return unicodedata.normalize(
+        'NFD', label
+    ).encode(
+        'ascii', 'ignore'
+    ).decode("utf-8").lower()
+
 # https://muywaso.com/especial-de-datos-muy-waso-sobre-el-coronavirus-en-bolivia/
-def load_testing_data():
+def load_testing_data(aggregate = False):
     PATH = './data/testing.muywaso.csv'
     URL = 'https://app.flourish.studio/api/data_table/3987481/csv'
 
@@ -357,47 +369,71 @@ def load_testing_data():
         with open(PATH, 'w') as f:
             f.write(data)
 
-    data = []
+    response = do_read_csv(PATH)
+    response_header = [do_process_label(_) for _ in response[0][1:]]
 
-    with open(PATH) as f:
-        csv_file = csv.reader(f)
-        data = [
-            [
-                int(_.replace('.', '')) if _ else 0 for _ in line[1:]
-            ] for idx, line in enumerate(csv_file) if idx > 0
-        ]
-        data = [sum(_) for _ in data]
-        data = np.pad(data, (11, 0), 'constant', constant_values=(0,))
+    response = np.array([[
+        _ for _ in row[1:] if len(_)
+    ] for row in response[1:]], dtype=np.int32)
 
-    return data
+    if aggregate:
+        return response.sum(axis=1)
+    else:
+        return dict((zip(response_header, response.T)))
 
 # https://github.com/mauforonda
-def load_data():
-    final_data = []
+def load_data(aggregate = True):
+    FILES = ['confirmados', 'decesos', 'recuperados']
+    response = [do_read_csv(
+        './data/covid19-bolivia/{}.csv'.format(file_name)
+    ) for file_name in FILES]
 
-    with open('./data/covid19-bolivia2/nacional.csv') as f:
-        csv_file = csv.reader(f)
-        data = [
-            [
-                int(_.replace('.', '')) for _ in line[1:]
-            ] for idx, line in enumerate(csv_file) if idx > 0
-        ]
-        active_cases = np.array([_[0] - sum(_[1:]) for _ in data])
-        data = [np.array(_) for _ in zip(*data)]
-        data.insert(0, active_cases)
+    response_header = [do_process_label(_) for _ in response[0][0][1:]]
+    response = np.array([[
+        row[1:] for row in data[1:]
+    ][::-1] for data in response], dtype=np.int32)
 
-        final_data.extend(data)
+    if (response[0][-1] == response[0][-2]).all():
+        response = response[:, :-1]
 
-    data = load_testing_data()
-    data = np.pad(
-        data,
-        (0, len(final_data[0]) - len(data)),
-        'constant',
-        constant_values=(0,)
-    )
-    final_data.append(data)
+    testing_data = load_testing_data(aggregate)
 
-    return np.array(final_data)
+    if aggregate:
+        response = np.array([np.sum(_, axis=1) for _ in response])
+        active_cases = response.T[:,0] - response.T[:,1:].sum(axis=1)
+        final_response = np.insert(response, 0, active_cases, axis=0)
+
+        testing_data = np.pad(
+            testing_data,
+            (0, len(active_cases) - len(testing_data)),
+            'constant',
+            constant_values=(0,)
+        )
+        final_response = np.append(final_response, [testing_data], axis=0)
+
+    else:
+        final_response = {}
+        groups = response.T
+
+        for idx, response in enumerate(groups):
+            response = response.T
+
+            active_cases = response.T[:,0] - response.T[:,1:].sum(axis=1)
+            response = np.insert(response, 0, active_cases, axis=0)
+
+            group_testing_data = testing_data[response_header[idx]]
+            group_testing_data = np.pad(
+                group_testing_data,
+                (0, len(active_cases) - len(group_testing_data)),
+                'constant',
+                constant_values=(0,)
+            )
+
+            final_response[response_header[idx]] = np.append(
+                response, [group_testing_data], axis=0
+            )
+
+    return final_response
 
 # https://github.com/CSSEGISandData/COVID-19
 def load_data_jhu(country):
@@ -440,7 +476,8 @@ def load_population_data(resolution):
     data = filter(lambda _: _[3], csv_file)
 
     population_data = {}
-    for group_key, group in it.groupby(data, key=lambda _: _[resolution]):
+    grouper = lambda _: _[resolution] if resolution == 0 else (_[resolution - 1], _[resolution])
+    for group_key, group in it.groupby(data, key=grouper):
         group_data = population_data[group_key] = {
             'zones': [],
             'weights': [],
@@ -450,7 +487,6 @@ def load_population_data(resolution):
             group_data['zones'].append(element[3])
             group_data['weights'].append(int(element[4]))
             group_data['total'] = group_data['total'] + int(element[4])
-
 
         group_data['weights'] = np.array(group_data['weights']) / group_data['total']
 
@@ -481,6 +517,7 @@ def load_mobility_data(resolution = 0):
         group_data = []
         for idx in range(len(group['zones'])):
             zone_key = group['zones'][idx]
+
             if zone_key not in mobility_data:
                 continue
 
@@ -497,11 +534,41 @@ def load_mobility_data(resolution = 0):
                 )
             )
 
+        if not group_data:
+            continue
+
         group_data = pd.DataFrame(group_data)
-        group_data.columns = 'date', 'visited_tiles_change', 'single_tile_ratio'
+        group_data.columns = (
+            'date', 'visited_tiles_change', 'single_tile_ratio'
+        )
 
         group_data = group_data.groupby('date').sum()
+
         vtc[group_key] = group_data['visited_tiles_change']
         stc[group_key] = group_data['single_tile_ratio']
 
+    if len(vtc.columns) > 1:
+        vtc.columns = pd.MultiIndex.from_tuples(vtc.columns)
+        stc.columns = pd.MultiIndex.from_tuples(stc.columns)
+
     return vtc, stc
+
+def lazy_load_data(where = None):
+    if where is None:
+        data = load_data(aggregate=True)
+        aggregated_mobility = load_mobility_data()
+
+        vtc, stc = load_mobility_data(1)
+        key = vtc.columns.get_level_values(0)[0]
+        local_mobility = vtc[key], stc[key]
+
+    else:
+        data = load_data(aggregate=False)[where]
+        vtc, stc = load_mobility_data(1)
+        key = vtc.columns.get_level_values(0)[0]
+        aggregated_mobility = vtc[key][where.upper()], stc[key][where.upper()]
+
+        vtc, stc = load_mobility_data(2)
+        local_mobility = vtc[where.upper()], stc[where.upper()]
+
+    return data, aggregated_mobility, local_mobility
