@@ -376,6 +376,8 @@ def load_testing_data(aggregate = False):
         _ for _ in row[1:] if len(_)
     ] for row in response[1:]], dtype=np.int32)
 
+    response = response.cumsum(axis=0)
+
     if aggregate:
         return response.sum(axis=1)
     else:
