@@ -473,9 +473,9 @@ def load_data_jhu(country):
     return np.array(final_data)
 
 # https://www.ine.gob.bo/index.php/censos-y-proyecciones-de-poblacion-sociales/
-def load_population_data(resolution):
+def load_population_data(resolution, group_by=3):
     csv_file = csv.reader(open('./data/bolivia.population.final.csv'))
-    data = filter(lambda _: _[3], csv_file)
+    data = filter(lambda _: _[group_by], csv_file)
 
     population_data = {}
     grouper = lambda _: _[resolution] if resolution == 0 else (_[resolution - 1], _[resolution])
