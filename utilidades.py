@@ -132,7 +132,11 @@ def estimate_rt(
 
     r_ts, r_ts_err = r_ts[:-1], r_ts_err[:-1]
 
-    return r_ts, r_ts - qnorm * r_ts_err, r_ts + qnorm * r_ts_err
+    r_ts_max = r_ts + qnorm * r_ts_err
+    r_ts_min = r_ts - qnorm * r_ts_err
+    r_ts_min[r_ts_min < 0] = 0
+
+    return r_ts, r_ts_min, r_ts_max
 
 pyplot.rcParams['figure.figsize'] = [40/2.54, 20/2.54]
 def plot(x, *curves, **kwargs):
@@ -158,6 +162,29 @@ def plot_moving_averaged(x, y = None, label = None, window_size = 4):
     ax.plot(moving_average(y, window_size), color='darkblue')
 
     pyplot.grid(b=True, color='DarkTurquoise', alpha=0.2, linestyle=':', linewidth=2)
+    if label:
+        ax.legend(loc='upper left')
+
+    return ax
+
+def plot_increments(x, y=None, label='', nth = 5, max = 10):
+    if not y:
+        y = x
+        x = range(len(y))
+
+    fig, ax = pyplot.subplots()
+
+    cum_cases = accumulate(y, nth)
+    cum_cases[cum_cases < 1.] = 1.
+
+    inc_cases = cum_cases[1:] / cum_cases[:-1]
+    inc_cases[inc_cases > 10.] = 10.
+    inc_cases = np.pad(inc_cases, (1, 0), 'constant', constant_values=(0,))
+    inc_cases = np.repeat(inc_cases, nth)[-1 * len(x):]
+
+    ax.step(x, inc_cases, label=label)
+
+    ax.grid(b=True, color='DarkTurquoise', alpha=0.2, linestyle=':', linewidth=2)
     if label:
         ax.legend(loc='upper left')
 
