@@ -5,6 +5,7 @@ import scipy.integrate
 import scipy.stats
 
 import csv
+import json
 import os.path
 import urllib.request
 import itertools as it
@@ -384,17 +385,54 @@ def do_process_label(label):
         'ascii', 'ignore'
     ).decode("utf-8").lower()
 
+def download_testing_data_old(write_to):
+    URL = 'https://app.flourish.studio/api/data_table/3987481/csv'
+
+    response = urllib.request.urlopen(URL)
+    data = response.read().decode('utf-8')
+
+    with open(write_to, 'w') as f:
+        f.write(data)
+
+def download_testing_data(write_to):
+    URL = 'https://flo.uri.sh/visualisation/2519845/embed'
+
+    req = urllib.request.Request(
+        URL, headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64)'}
+    )
+    response = urllib.request.urlopen(req)
+    data = response.read().decode('utf-8')
+
+    store_to = []
+    look_for = [
+        '_Flourish_data_column_names = ',
+        '_Flourish_data = '
+    ]
+
+    for line in data.split('\n')[-10:]:
+        for wildcard in look_for:
+            if not wildcard in line:
+                continue
+
+            _, line_data = line.split(wildcard)
+            store_to.append(line_data[:-1])
+
+    if not store_to:
+        raise Exception('No funca wey')
+
+    header, remote_data = [json.loads(_)['data'] for _ in store_to]
+    remote_data = [header] + remote_data
+    local_data = [([row['label']] + row['value']) for row in remote_data]
+
+    with open(write_to, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerows(local_data)
+
 # https://muywaso.com/especial-de-datos-muy-waso-sobre-el-coronavirus-en-bolivia/
 def load_testing_data(aggregate = False):
     PATH = './data/testing.muywaso.csv'
-    URL = 'https://app.flourish.studio/api/data_table/3987481/csv'
-
     if not os.path.isfile(PATH):
-        response = urllib.request.urlopen(URL)
-        data = response.read().decode('utf-8')
-
-        with open(PATH, 'w') as f:
-            f.write(data)
+        download_testing_data(PATH)
 
     response = do_read_csv(PATH)
     response_header = [do_process_label(_) for _ in response[0][1:]]
