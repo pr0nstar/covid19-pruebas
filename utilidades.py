@@ -6,6 +6,7 @@ import scipy.stats
 
 import csv
 import json
+import datetime
 import os.path
 import urllib.request
 import itertools as it
@@ -384,6 +385,12 @@ def do_process_label(label):
     ).encode(
         'ascii', 'ignore'
     ).decode("utf-8").lower()
+
+def get_today(data):
+    date = datetime.datetime.strptime(
+        '2020-03-21', '%Y-%m-%d'
+    ) + datetime.timedelta(days=len(data[0]) - 1)
+    return '{}'.format(date.strftime('%Y-%m-%d'))
 
 def download_testing_data_old(write_to):
     URL = 'https://app.flourish.studio/api/data_table/3987481/csv'
