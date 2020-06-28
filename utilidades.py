@@ -143,13 +143,19 @@ def estimate_rt(
 pyplot.rcParams['figure.figsize'] = [40/2.54, 20/2.54]
 def plot(x, *curves, **kwargs):
     fig, ax = pyplot.subplots()
+
+    labels = []
+    if 'labels' in kwargs:
+        labels = kwargs['labels']
+        del kwargs['labels']
+
     for idx, curve in enumerate(curves):
-        label = kwargs['labels'][idx] if 'labels' in kwargs else None
-        ax.plot(x[:len(curve)], curve, label=label)
+        label = labels[idx] if labels else None
+        ax.plot(x[:len(curve)], curve, label=label, **kwargs)
 
     pyplot.grid(b=True, color='DarkTurquoise', alpha=0.2, linestyle=':', linewidth=2)
 
-    if 'labels' in kwargs:
+    if labels:
         ax.legend(loc='upper left')
 
     return ax
