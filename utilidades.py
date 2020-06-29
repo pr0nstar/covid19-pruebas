@@ -140,7 +140,7 @@ def estimate_rt(
 
     return r_ts, r_ts_min, r_ts_max
 
-pyplot.rcParams['figure.figsize'] = [40/2.54, 20/2.54]
+pyplot.rcParams['figure.figsize'] = [50/2.54, 25/2.54]
 def plot(x, *curves, **kwargs):
     fig, ax = pyplot.subplots()
 
