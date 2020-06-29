@@ -14,6 +14,10 @@ import unicodedata
 
 import matplotlib
 from matplotlib import pyplot
+from matplotlib import cm
+
+# Hackish :S
+from types import MethodType
 
 
 def run(model_fn, model_data, days, acc_days=0,  step=0.1, **params):
