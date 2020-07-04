@@ -20,6 +20,8 @@ from matplotlib import cm
 from types import MethodType
 
 
+np.warnings.filterwarnings('ignore')
+
 def run(model_fn, model_data, days, acc_days=0,  step=0.1, **params):
     if type(days) is not list:
         days = [days]
@@ -396,9 +398,10 @@ def do_process_label(label):
         'ascii', 'ignore'
     ).decode("utf-8").lower()
 
+FIRST_DAY = '2020-03-21'
 def get_today(data):
     date = datetime.datetime.strptime(
-        '2020-03-21', '%Y-%m-%d'
+        FIRST_DAY, '%Y-%m-%d'
     ) + datetime.timedelta(days=len(data[0]) - 1)
     return '{}'.format(date.strftime('%Y-%m-%d'))
 
