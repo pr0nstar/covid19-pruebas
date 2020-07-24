@@ -414,7 +414,8 @@ def download_testing_data_old(write_to):
     with open(write_to, 'w') as f:
         f.write(data)
 
-def download_testing_data(write_to):
+# https://muywaso.com/especial-de-datos-muy-waso-sobre-el-coronavirus-en-bolivia/
+def download_testing_data_old_old(write_to):
     URL = 'https://flo.uri.sh/visualisation/2519845/embed'
 
     req = urllib.request.Request(
@@ -448,8 +449,7 @@ def download_testing_data(write_to):
         writer = csv.writer(f)
         writer.writerows(local_data)
 
-# https://muywaso.com/especial-de-datos-muy-waso-sobre-el-coronavirus-en-bolivia/
-def load_testing_data(aggregate = False):
+def load_testing_data_old():
     PATH = './data/testing.muywaso.csv'
     if not os.path.isfile(PATH):
         download_testing_data(PATH)
@@ -460,13 +460,45 @@ def load_testing_data(aggregate = False):
     response = np.array([[
         _ for _ in row[1:] if len(_)
     ] for row in response[1:]], dtype=np.int32)
-
     response = response.cumsum(axis=0)
 
-    if aggregate:
-        return response.sum(axis=1)
-    else:
-        return dict((zip(response_header, response.T)))
+    return response
+
+def load_testing_data():
+    testing_data = pd.read_csv('./data/testing.csv')
+    testing_data_columns = [
+        idx.lower() for idx in testing_data.columns[1:] if 'Unnamed' not in idx
+    ]
+    testing_data_idx = pd.MultiIndex.from_product([
+        testing_data_columns, testing_data.iloc[0].reset_index()[1:][0].unique()
+    ])
+
+    testing_data['Fecha'] = pd.to_datetime(testing_data['Fecha'])
+    testing_data = testing_data.set_index('Fecha')
+
+    testing_data = testing_data.iloc[1:]
+    testing_data.columns = testing_data_idx
+
+    testing_data = testing_data.astype(np.float32)
+    testing_data = testing_data.interpolate(method='quadratic')
+    testing_data = testing_data.swaplevel(axis=1).sort_index(level=0, axis=1)
+
+    pending_tests = pd.read_csv('./data/testing.pending.csv')
+    pending_tests['Fecha'] = pd.to_datetime(pending_tests['Fecha'])
+    pending_tests = pending_tests.set_index('Fecha')
+
+    pending_tests = pending_tests[testing_data.index[0]:].mean(axis=1)
+    total_pending_tests = testing_data['Sospechosos'].sum(axis=1)
+
+    diff_pending_tests = pending_tests - total_pending_tests
+    diff_pending_tests[diff_pending_tests < 0] = 0
+
+    testing_data['Sospechosos']['santa cruz'].update(diff_pending_tests)
+
+    return (
+        testing_data['Sospechosos'][testing_data_columns],
+        testing_data['Descartados'][testing_data_columns]
+    )
 
 # https://github.com/mauforonda
 def load_data(aggregate = True):
@@ -483,20 +515,22 @@ def load_data(aggregate = True):
     if (response[0][-1] == response[0][-2]).all():
         response = response[:, :-1]
 
-    testing_data = load_testing_data(aggregate)
+    pending, discarded = load_testing_data()
+
+    do_pad = lambda _, __: np.pad(
+        _, (__ - len(_), 0), 'constant', constant_values=(np.nan,)
+    )
 
     if aggregate:
         response = np.array([np.sum(_, axis=1) for _ in response])
         active_cases = response.T[:,0] - response.T[:,1:].sum(axis=1)
         final_response = np.insert(response, 0, active_cases, axis=0)
 
-        testing_data = np.pad(
-            testing_data,
-            (0, len(active_cases) - len(testing_data)),
-            'constant',
-            constant_values=(0,)
-        )
-        final_response = np.append(final_response, [testing_data], axis=0)
+        pending = do_pad(pending.sum(axis=1), len(active_cases))
+        discarded = do_pad(discarded.sum(axis=1), len(active_cases))
+
+        final_response = np.append(final_response, [pending], axis=0)
+        final_response = np.append(final_response, [discarded], axis=0)
 
     else:
         final_response = {}
@@ -508,16 +542,15 @@ def load_data(aggregate = True):
             active_cases = response.T[:,0] - response.T[:,1:].sum(axis=1)
             response = np.insert(response, 0, active_cases, axis=0)
 
-            group_testing_data = testing_data[response_header[idx]]
-            group_testing_data = np.pad(
-                group_testing_data,
-                (0, len(active_cases) - len(group_testing_data)),
-                'constant',
-                constant_values=(0,)
-            )
+            local_pending = pending[response_header[idx]]
+            local_pending = do_pad(local_pending, len(active_cases))
 
+            local_discarded = discarded[response_header[idx]]
+            local_discarded = do_pad(local_discarded, len(active_cases))
+
+            response = np.append(response, [local_pending], axis=0)
             final_response[response_header[idx]] = np.append(
-                response, [group_testing_data], axis=0
+                response, [local_discarded], axis=0
             )
 
     return final_response
