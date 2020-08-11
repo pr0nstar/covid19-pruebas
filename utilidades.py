@@ -19,8 +19,13 @@ from matplotlib import cm
 # Hackish :S
 from types import MethodType
 
+import warnings
+from statsmodels.tools.sm_exceptions import ConvergenceWarning
+from statsmodels.tsa.api import ExponentialSmoothing
+
 
 np.warnings.filterwarnings('ignore')
+warnings.simplefilter('ignore', ConvergenceWarning)
 
 def run(model_fn, model_data, days, acc_days=0,  step=0.1, **params):
     if type(days) is not list:
@@ -70,11 +75,28 @@ def moving_average(arr, by):
         mode='same'
     )[:-pad]
 
+def fast_smoothing(arr, smoothing_level=.2, window_size=0):
+    mask = (arr == 0)
+    arr[mask] = 1
+    fit = ExponentialSmoothing(
+        arr, trend='mul', seasonal=None, damped=True
+    ).fit(
+        use_basinhopping=True, smoothing_level=smoothing_level
+    )
+    arr = fit.fittedvalues
+    arr[mask] = 0
+
+    if window_size:
+        return moving_average(arr, window_size)
+
+    return arr
+
 def estimate_rt(
     new_cases,
     periodo_incubacion=5.2,
     infectivity_profile=None,
-    window_size=0
+    window_size=0,
+    smooth_seasons=True
 ):
     '''
     https://stochastik-tu-ilmenau.github.io/COVID-19/reports/repronum/repronum.pdf
@@ -86,6 +108,21 @@ def estimate_rt(
         infectivity_profile = infectivity_profile / sum(infectivity_profile)
 
     res = []
+
+    no_cases_mask = new_cases < 1
+    new_cases[no_cases_mask] = 1
+    if smooth_seasons:
+        fit = ExponentialSmoothing(
+            new_cases,
+#             seasonal_periods=7,
+            trend='mul', seasonal=None, damped=True
+        ).fit(
+            use_basinhopping=True,
+            smoothing_level=0.2
+        )
+        new_cases = fit.fittedvalues
+
+    new_cases[no_cases_mask] = 0
 
     if window_size > 0:
         new_cases = moving_average(new_cases, window_size)
