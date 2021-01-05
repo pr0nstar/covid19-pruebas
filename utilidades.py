@@ -15,6 +15,8 @@ import unicodedata
 import matplotlib
 from matplotlib import pyplot
 from matplotlib import cm
+from matplotlib import dates
+
 
 # Hackish :S
 from types import MethodType
@@ -204,13 +206,13 @@ def plot(x, *curves, **kwargs):
     return ax
 
 def plot_moving_averaged(x, y = None, label = None, window_size = 4):
-    if not y:
+    if y is None:
         y = x
         x = range(len(y))
 
     fig, ax = pyplot.subplots()
     ax.stem(x, y, label=label)
-    ax.plot(moving_average(y, window_size), color='darkblue')
+    ax.plot(x, moving_average(y, window_size), color='darkblue')
 
     pyplot.grid(b=True, color='DarkTurquoise', alpha=0.2, linestyle=':', linewidth=2)
     if label:
@@ -219,7 +221,7 @@ def plot_moving_averaged(x, y = None, label = None, window_size = 4):
     return ax
 
 def plot_increments(x, y=None, label='', nth = 5, max = 10):
-    if not y:
+    if y is None:
         y = x
         x = range(len(y))
 
@@ -435,13 +437,6 @@ def do_process_label(label):
         'ascii', 'ignore'
     ).decode("utf-8").lower()
 
-FIRST_DAY = '2020-03-21'
-def get_today(data):
-    date = datetime.datetime.strptime(
-        FIRST_DAY, '%Y-%m-%d'
-    ) + datetime.timedelta(days=len(data[0]) - 1)
-    return '{}'.format(date.strftime('%Y-%m-%d'))
-
 def download_testing_data_old(write_to):
     URL = 'https://app.flourish.studio/api/data_table/3987481/csv'
 
@@ -520,17 +515,17 @@ def load_testing_data():
     testing_data = testing_data.interpolate(method='quadratic')
     testing_data = testing_data.swaplevel(axis=1).sort_index(level=0, axis=1)
 
-    pending_tests = pd.read_csv('./data/testing.pending.csv')
-    pending_tests['Fecha'] = pd.to_datetime(pending_tests['Fecha'])
-    pending_tests = pending_tests.set_index('Fecha')
-
-    pending_tests = pending_tests[testing_data.index[0]:].mean(axis=1)
-    total_pending_tests = testing_data['Sospechosos'].sum(axis=1)
-
-    diff_pending_tests = pending_tests - total_pending_tests
-    diff_pending_tests[diff_pending_tests < 0] = 0
-
-    testing_data['Sospechosos']['santa cruz'].update(diff_pending_tests)
+    # pending_tests = pd.read_csv('./data/testing.pending.csv')
+    # pending_tests['Fecha'] = pd.to_datetime(pending_tests['Fecha'])
+    # pending_tests = pending_tests.set_index('Fecha')
+    #
+    # pending_tests = pending_tests[testing_data.index[0]:].mean(axis=1)
+    # total_pending_tests = testing_data['Sospechosos'].sum(axis=1)
+    #
+    # diff_pending_tests = pending_tests - total_pending_tests
+    # diff_pending_tests[diff_pending_tests < 0] = 0
+    #
+    # testing_data['Sospechosos']['santa cruz'].update(diff_pending_tests)
 
     return (
         testing_data['Sospechosos'][testing_data_columns],
@@ -539,7 +534,7 @@ def load_testing_data():
 
 # https://github.com/mauforonda
 def load_data(aggregate = True):
-    FILES = ['confirmados', 'decesos', 'recuperados']
+    FILES = ['confirmados', 'decesos']
     response = [do_read_csv(
         './data/covid19-bolivia/{}.csv'.format(file_name)
     ) for file_name in FILES]
