@@ -512,7 +512,7 @@ def load_testing_data():
     testing_data.columns = testing_data_idx
 
     testing_data = testing_data.astype(np.float32)
-    testing_data = testing_data.interpolate(method='quadratic')
+    testing_data = testing_data.interpolate(method='linear', limit_area='inside')
     testing_data = testing_data.swaplevel(axis=1).sort_index(level=0, axis=1)
 
     # pending_tests = pd.read_csv('./data/testing.pending.csv')
