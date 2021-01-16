@@ -13,10 +13,12 @@ import itertools as it
 import unicodedata
 
 import matplotlib
+
 from matplotlib import pyplot
 from matplotlib import cm
 from matplotlib import dates
 
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # Hackish :S
 from types import MethodType
@@ -187,7 +189,13 @@ def estimate_rt(
 
 pyplot.rcParams['figure.figsize'] = [50/2.54, 25/2.54]
 def plot(x, *curves, **kwargs):
-    fig, ax = pyplot.subplots()
+    if not 'ax' in kwargs:
+    	fig, ax = pyplot.subplots()
+    else:
+    	ax = kwargs['ax']
+    	fig = ax.get_figure()
+    	
+    	del kwargs['ax']
 
     labels = []
     if 'labels' in kwargs:
