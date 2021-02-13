@@ -100,7 +100,7 @@ def estimate_rt(
     periodo_incubacion=5.2,
     infectivity_profile=None,
     window_size=0,
-    smooth_seasons=True
+    smooth_seasons=.4
 ):
     '''
     https://stochastik-tu-ilmenau.github.io/COVID-19/reports/repronum/repronum.pdf
@@ -115,14 +115,14 @@ def estimate_rt(
 
     no_cases_mask = new_cases < 1
     new_cases[no_cases_mask] = 1
-    if smooth_seasons:
+    if smooth_seasons > 0:
         fit = ExponentialSmoothing(
             new_cases,
 #             seasonal_periods=7,
             trend='mul', seasonal=None, damped=True
         ).fit(
             use_basinhopping=True,
-            smoothing_level=0.2
+            smoothing_level=smooth_seasons
         )
         new_cases = fit.fittedvalues
 
@@ -194,7 +194,7 @@ def plot(x, *curves, **kwargs):
     else:
     	ax = kwargs['ax']
     	fig = ax.get_figure()
-    	
+
     	del kwargs['ax']
 
     labels = []
