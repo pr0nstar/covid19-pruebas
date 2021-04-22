@@ -2,7 +2,6 @@ numpy
 scipy
 pandas
 xlrd
-unicodedata
 statsmodels
 seaborn
 geopandas
