@@ -1,3 +1,9 @@
 # covid19-pruebas
-Bolivia
-<img src='./img/latest.png' />
+### Reporte
+<img src='./img/latest.jpeg' />
+
+### Municipal
+<img src='./img/casos.bolivia.heatmap.jpg' />
+
+### GTrends Sudamerica
+<img src='./img/gtrends.jpg' />

@@ -4,13 +4,15 @@ import scipy
 import scipy.integrate
 import scipy.stats
 
+import io
 import csv
 import json
 import datetime
 import os.path
-import urllib.request
+import requests
 import itertools as it
 import unicodedata
+import shutil
 
 import matplotlib
 
@@ -27,6 +29,9 @@ import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 from statsmodels.tsa.api import ExponentialSmoothing
 
+from github import Github
+from bs4 import BeautifulSoup
+from zipfile import ZipFile
 
 np.warnings.filterwarnings('ignore')
 warnings.simplefilter('ignore', ConvergenceWarning)
@@ -445,67 +450,24 @@ def do_process_label(label):
         'ascii', 'ignore'
     ).decode("utf-8").lower()
 
-def download_testing_data_old(write_to):
-    URL = 'https://app.flourish.studio/api/data_table/3987481/csv'
+def remote_path(path):
+    git = Github()
+    repo = git.get_repo('pr0nstar/covid19-data')
 
-    response = urllib.request.urlopen(URL)
-    data = response.read().decode('utf-8')
+    base_path = os.path.dirname(path)
+    base_name = os.path.basename(path)
 
-    with open(write_to, 'w') as f:
-        f.write(data)
+    base_dir = repo.get_contents(base_path)
+    file_obj = {
+        os.path.basename(_.path): _ for _ in base_dir
+    }[base_name]
 
-# https://muywaso.com/especial-de-datos-muy-waso-sobre-el-coronavirus-en-bolivia/
-def download_testing_data_old_old(write_to):
-    URL = 'https://flo.uri.sh/visualisation/2519845/embed'
-
-    req = urllib.request.Request(
-        URL, headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64)'}
-    )
-    response = urllib.request.urlopen(req)
-    data = response.read().decode('utf-8')
-
-    store_to = []
-    look_for = [
-        '_Flourish_data_column_names = ',
-        '_Flourish_data = '
-    ]
-
-    for line in data.split('\n')[-10:]:
-        for wildcard in look_for:
-            if not wildcard in line:
-                continue
-
-            _, line_data = line.split(wildcard)
-            store_to.append(line_data[:-1])
-
-    if not store_to:
-        raise Exception('No funca wey')
-
-    header, remote_data = [json.loads(_)['data'] for _ in store_to]
-    remote_data = [header] + remote_data
-    local_data = [([row['label']] + row['value']) for row in remote_data]
-
-    with open(write_to, 'w') as f:
-        writer = csv.writer(f)
-        writer.writerows(local_data)
-
-def load_testing_data_old():
-    PATH = './data/testing.muywaso.csv'
-    if not os.path.isfile(PATH):
-        download_testing_data(PATH)
-
-    response = do_read_csv(PATH)
-    response_header = [do_process_label(_) for _ in response[0][1:]]
-
-    response = np.array([[
-        _ for _ in row[1:] if len(_)
-    ] for row in response[1:]], dtype=np.int32)
-    response = response.cumsum(axis=0)
-
-    return response
+    return file_obj.download_url
 
 def load_testing_data():
-    testing_data = pd.read_csv('./data/testing.csv')
+    testing_data = pd.read_csv(
+        remote_path('processed/bolivia/testing.csv')
+    )
     testing_data_columns = [
         idx.lower() for idx in testing_data.columns[1:] if 'Unnamed' not in idx
     ]
@@ -523,112 +485,104 @@ def load_testing_data():
     testing_data = testing_data.interpolate(method='linear', limit_area='inside')
     testing_data = testing_data.swaplevel(axis=1).sort_index(level=0, axis=1)
 
-    # pending_tests = pd.read_csv('./data/testing.pending.csv')
-    # pending_tests['Fecha'] = pd.to_datetime(pending_tests['Fecha'])
-    # pending_tests = pending_tests.set_index('Fecha')
-    #
-    # pending_tests = pending_tests[testing_data.index[0]:].mean(axis=1)
-    # total_pending_tests = testing_data['Sospechosos'].sum(axis=1)
-    #
-    # diff_pending_tests = pending_tests - total_pending_tests
-    # diff_pending_tests[diff_pending_tests < 0] = 0
-    #
-    # testing_data['Sospechosos']['santa cruz'].update(diff_pending_tests)
-
     return (
         testing_data['Sospechosos'][testing_data_columns],
         testing_data['Descartados'][testing_data_columns]
     )
 
-# https://github.com/mauforonda
-def load_data(aggregate = True):
-    FILES = ['confirmados', 'decesos']
-    response = [do_read_csv(
-        './data/covid19-bolivia/{}.csv'.format(file_name)
-    ) for file_name in FILES]
+CASES_DATA_NAME = {
+    'confirmed': 'confirmados',
+    'deaths': 'decesos'
+}
+ADM1_NAME = {
+    'BO-B': 'beni',
+    'BO-C': 'cochabamba',
+    'BO-H': 'chuquisaca',
+    'BO-L': 'la paz',
+    'BO-N': 'pando',
+    'BO-O': 'oruro',
+    'BO-P': 'potosi',
+    'BO-S': 'santa cruz',
+    'BO-T': 'tarija'
+}
+COLUMNS_ORDER = [
+    'la paz', 'cochabamba', 'santa cruz', 'oruro', 'potosi',
+    'tarija', 'chuquisaca', 'beni', 'pando'
+]
+def load_data():
+    data_df = pd.DataFrame([])
 
-    response_header = [do_process_label(_) for _ in response[0][0][1:]]
-    response = np.array([[
-        row[1:] for row in data[1:]
-    ][::-1] for data in response], dtype=np.int32)
+    for file in ['confirmed', 'deaths']:
+        file_df = pd.read_csv(
+            remote_path('raw/paho/{}.timeline.csv'.format(file)),
+            index_col=[0],
+            header=[0, 1]
+        )
 
-    if (response[0][-1] == response[0][-2]).all():
-        response = response[:, :-1]
+        file_df.columns.names = ['', '']
+        file_df.index.name = ''
 
+        file_df = file_df['BOL']
+
+        file_df = file_df.rename(ADM1_NAME, axis=1)
+        file_df.index = pd.to_datetime(file_df.index)
+
+        file_df = file_df[COLUMNS_ORDER]
+        file_df.columns = pd.MultiIndex.from_product([
+            [CASES_DATA_NAME[file]], file_df.columns
+        ])
+
+        file_df = file_df.astype(np.float64)
+        file_df[file_df.diff() < 0] = np.nan
+        file_df = file_df.interpolate('linear', limit_area='inside')
+        file_df = file_df.dropna(how='all')
+
+        data_df = pd.concat([data_df, file_df], axis=1)
+
+    data_df = data_df.sort_index()
+
+    # Aqui se cambia la definicion de caso recuperado a todos los casos 14 dias
+    # despues de ser diagnosticados (deberian ser 10?)
+    active_cases = data_df['confirmados'].diff().rolling(window=14).sum()
+    active_cases = active_cases.fillna(data_df['confirmados'])
+    active_cases.columns = pd.MultiIndex.from_product([
+        ['activos'], active_cases.columns
+    ])
+    data_df = pd.concat([data_df, active_cases], axis=1)
+
+    recovered_cases = data_df['confirmados'].shift(periods=14)
+    recovered_cases = recovered_cases - data_df['decesos']
+    recovered_cases[recovered_cases < 0] = 0
+    recovered_cases.columns = pd.MultiIndex.from_product([
+        ['recuperados'], recovered_cases.columns
+    ])
+    data_df = pd.concat([data_df, recovered_cases], axis=1)
+
+    # Testing
     pending, discarded = load_testing_data()
 
-    do_pad = lambda _, __: np.pad(
-        _, (__ - len(_), 0), 'constant', constant_values=(np.nan,)
-    )
-
-    if aggregate:
-        response = np.array([np.sum(_, axis=1) for _ in response])
-        active_cases = response.T[:,0] - response.T[:,1:].sum(axis=1)
-        final_response = np.insert(response, 0, active_cases, axis=0)
-
-        pending = do_pad(pending.sum(axis=1), len(active_cases))
-        discarded = do_pad(discarded.sum(axis=1), len(active_cases))
-
-        final_response = np.append(final_response, [pending], axis=0)
-        final_response = np.append(final_response, [discarded], axis=0)
-
-    else:
-        final_response = {}
-        groups = response.T
-
-        for idx, response in enumerate(groups):
-            response = response.T
-
-            active_cases = response.T[:,0] - response.T[:,1:].sum(axis=1)
-            response = np.insert(response, 0, active_cases, axis=0)
-
-            local_pending = pending[response_header[idx]]
-            local_pending = do_pad(local_pending, len(active_cases))
-
-            local_discarded = discarded[response_header[idx]]
-            local_discarded = do_pad(local_discarded, len(active_cases))
-
-            response = np.append(response, [local_pending], axis=0)
-            final_response[response_header[idx]] = np.append(
-                response, [local_discarded], axis=0
-            )
-
-    return final_response
-
-# https://github.com/CSSEGISandData/COVID-19
-def load_data_jhu(country):
-    FILES = [
-        'time_series_covid19_confirmed_global.csv',
-        'time_series_covid19_deaths_global.csv',
-        'time_series_covid19_recovered_global.csv'
-    ]
-    PATH = './data/COVID-19/csse_covid_19_data/csse_covid_19_time_series/{}'
-    country = country.lower()
-    final_data = []
-
-    for file_name in FILES:
-        with open(PATH.format(file_name)) as f:
-            csv_file = csv.reader(f)
-            data = np.array([
-                line[4:] for idx, line in enumerate(csv_file) if (
-                    idx > 0 and line[1].lower() == country
-                )
-            ]).astype(np.float)
-            data = data.sum(axis=0)
-            final_data.append(data)
-
-    start = np.argwhere(final_data[0])[0][0]
-    for idx, data in enumerate(final_data):
-        final_data[idx] = data[start:]
-
-    cases, deaths, recovered = final_data
-
-    active_cases = np.array([
-        cases[_] - deaths[_] - recovered[_] for _ in range(len(cases))
+    pending.columns = pd.MultiIndex.from_product([
+        ['sospechosos'], pending.columns
     ])
-    final_data.insert(0, active_cases)
+    data_df = pd.concat([data_df, pending], axis=1)
 
-    return np.array(final_data)
+    discarded.columns = pd.MultiIndex.from_product([
+        ['descartados'], discarded.columns
+    ])
+    data_df = pd.concat([data_df, discarded], axis=1)
+
+    data_df = data_df.rename({
+        'confirmados': 'cases',
+        'decesos': 'death',
+        'activos': 'active_cases',
+        'recuperados': 'recovered',
+        'sospechosos': 'pending',
+        'descartados': 'discarded'
+    }, axis=1)
+
+    data_df = data_df.loc[:data_df['cases'].last_valid_index()]
+
+    return data_df
 
 # https://www.ine.gob.bo/index.php/censos-y-proyecciones-de-poblacion-sociales/
 def load_population_data(resolution, group_by=3):
@@ -636,7 +590,11 @@ def load_population_data(resolution, group_by=3):
     data = filter(lambda _: _[group_by], csv_file)
 
     population_data = {}
-    grouper = lambda _: _[resolution] if resolution == 0 else (_[resolution - 1], _[resolution])
+    grouper = lambda _: (
+        _[resolution].lower() if resolution == 0 else (
+            _[resolution - 1].lower(), _[resolution].lower()
+        )
+    )
     for group_key, group in it.groupby(data, key=grouper):
         group_data = population_data[group_key] = {
             'zones': [],
@@ -652,60 +610,75 @@ def load_population_data(resolution, group_by=3):
 
     return population_data
 
-# https://data.humdata.org/dataset/movement-range-maps
-def load_mobility_data(resolution = 0):
-    mobility_data = {}
+def open_mobility_file():
+    TEMPORAL_FILE = '/tmp/movement-data.csv'
+    MOVEMENT_BASE_URL = 'https://data.humdata.org'
+    MOVEMENT_URL = MOVEMENT_BASE_URL + '/dataset/movement-range-maps'
 
-    csv_file = csv.reader(open('./data/facebook-mobility.bol.txt'), delimiter='\t')
-    data = list(csv_file)
+    if not os.path.exists(TEMPORAL_FILE):
+        cdata = requests.get(MOVEMENT_URL)
+        cdata = BeautifulSoup(cdata.text)
 
-    for zone_key, group in it.groupby(data, key=lambda _: _[3]):
-        data = []
-        for element in group:
-            data.append(
-                (element[0], float(element[5]), float(element[6]))
-            )
+        links = cdata.findChild('div', {'id': 'data-resources-0'}).find_all('a')
+        data_link = next(
+            _ for _ in links if 'href' in _.attrs and _.attrs['href'].endswith('zip')
+        )
+        data_link = data_link.attrs['href']
+        data_link = MOVEMENT_BASE_URL + data_link if data_link.startswith('/') else data_link
 
-        if len(data) > 30:
-            mobility_data[zone_key] = data
+        data_container = requests.get(data_link, stream=True)
+        data_container = ZipFile(io.BytesIO(data_container.content))
+
+        data_file = next(
+            _ for _ in data_container.filelist if _.filename.startswith('movement-range')
+        )
+        data_file = data_container.open(data_file.filename)
+
+        with open(TEMPORAL_FILE, 'wb') as disk_file:
+            shutil.copyfileobj(data_file, disk_file)
+
+        data_file.close()
+
+    return open(TEMPORAL_FILE)
+
+def load_mobility_data(resolution = 0, country='BOL'):
+    csv_file = open_mobility_file()
+    csv_file = csv.reader(csv_file, delimiter='\t')
+
+    head = next(csv_file)
+    data = [row for row in csv_file if row[1] == country]
+
+    mobility_data = pd.DataFrame(data, columns=head)
+    mobility_data['ds'] = pd.to_datetime(mobility_data['ds'])
+    mobility_data = mobility_data.set_index(['polygon_id', 'ds'])
+
+    mobility_data = mobility_data[[
+        'all_day_bing_tiles_visited_relative_change',
+        'all_day_ratio_single_tile_users'
+    ]]
+    mobility_data = mobility_data.astype(np.float64)
 
     vtc = pd.DataFrame()
     stc = pd.DataFrame()
     population_data = load_population_data(resolution)
 
     for group_key, group in population_data.items():
-        group_data = []
-        for idx in range(len(group['zones'])):
-            zone_key = group['zones'][idx]
+        group = pd.DataFrame.from_dict(group).drop('total', axis=1)
+        group = group.set_index('zones')
 
-            if zone_key not in mobility_data:
-                continue
+        group_data = mobility_data.loc[group.index]
 
-            dates, visited_tiles_change, single_tile_ratio = zip(
-                *mobility_data[zone_key]
-            )
-            weight = group['weights'][idx]
+        visited_tiles_change = group_data['all_day_bing_tiles_visited_relative_change']
+        visited_tiles_change = visited_tiles_change.unstack(level='ds')
+        visited_tiles_change = (visited_tiles_change.T * group['weights']).sum(axis=1)
 
-            group_data.extend(
-                zip(
-                    dates,
-                    np.array(visited_tiles_change) * weight,
-                    np.array(single_tile_ratio) * weight
-                )
-            )
+        vtc[group_key] = visited_tiles_change
 
-        if not group_data:
-            continue
+        single_tile_ratio = group_data['all_day_ratio_single_tile_users']
+        single_tile_ratio = single_tile_ratio.unstack(level='ds')
+        single_tile_ratio = (single_tile_ratio.T * group['weights']).sum(axis=1)
 
-        group_data = pd.DataFrame(group_data)
-        group_data.columns = (
-            'date', 'visited_tiles_change', 'single_tile_ratio'
-        )
-
-        group_data = group_data.groupby('date').sum()
-
-        vtc[group_key] = group_data['visited_tiles_change']
-        stc[group_key] = group_data['single_tile_ratio']
+        stc[group_key] = single_tile_ratio
 
     if len(vtc.columns) > 1:
         vtc.columns = pd.MultiIndex.from_tuples(vtc.columns)
@@ -713,22 +686,14 @@ def load_mobility_data(resolution = 0):
 
     return vtc, stc
 
-def lazy_load_data(where = None):
-    if where is None:
-        data = load_data(aggregate=True)
-        aggregated_mobility = load_mobility_data()
+def lazy_load_data():
+    data = load_data()
+    data = data.groupby(level=0, axis=1).sum()
 
-        vtc, stc = load_mobility_data(1)
-        key = vtc.columns.get_level_values(0)[0]
-        local_mobility = vtc[key], stc[key]
+    aggregated_mobility = load_mobility_data()
 
-    else:
-        data = load_data(aggregate=False)[where]
-        vtc, stc = load_mobility_data(1)
-        key = vtc.columns.get_level_values(0)[0]
-        aggregated_mobility = vtc[key][where.upper()], stc[key][where.upper()]
-
-        vtc, stc = load_mobility_data(2)
-        local_mobility = vtc[where.upper()], stc[where.upper()]
+    vtc, stc = load_mobility_data(1)
+    key = vtc.columns.get_level_values(0)[0]
+    local_mobility = vtc[key], stc[key]
 
     return data, aggregated_mobility, local_mobility

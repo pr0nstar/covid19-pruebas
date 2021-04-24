@@ -23,13 +23,14 @@ jobs:
       - name: run notebooks
         id: run_notebooks
         run: |
+          jupyter nbconvert --to notebook --inplace --execute 0_general.ipynb
           find ./extra/*.ipynb | xargs -I'{}' jupyter nbconvert --to notebook --inplace --execute '{}'
       - name: git status
         id: git-status
         run: |
           git config --global user.email "covid-pruebas-bot@example.com"
           git config --global user.name "covid-pruebas-bot"
-          echo ::set-output name=result::$(git status | tr -d "\n" | grep -c "nothing to commit")
+          echo ::set-output name=result::$(git status ./img/ | tr -d "\n" | grep -c "nothing to commit")
       - name: commit
         if: steps.git-status.outputs.result == 0
         env:
