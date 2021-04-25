@@ -1,6 +1,7 @@
 numpy
 scipy
 pandas
+beautifulsoup4
 xlrd
 statsmodels
 seaborn
