@@ -7,3 +7,6 @@
 
 ### GTrends Sudamerica
 <img src='./img/gtrends.jpg' />
+
+### Subregistro mortalidad subnacional en sudamerica (beta)
+<img src='./img/mortality.subregistration.jpg' />
