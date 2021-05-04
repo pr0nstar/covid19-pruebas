@@ -533,10 +533,14 @@ def load_data():
         ])
 
         file_df = file_df.astype(np.float64)
-        file_df[file_df.diff() < 0] = np.nan
-        file_df = file_df.interpolate('linear', limit_area='inside')
-        file_df = file_df.dropna(how='all')
+        file_df = file_df.drop_duplicates().asfreq('D')
+        file_df = file_df.interpolate('from_derivatives', limit_area='inside')
 
+        for _ in range(5):
+            file_df[file_df.diff() < 0] = np.nan
+            file_df = file_df.interpolate('from_derivatives', limit_area='inside')
+
+        file_df = file_df.round().dropna(how='all')
         data_df = pd.concat([data_df, file_df], axis=1)
 
     data_df = data_df.sort_index()
