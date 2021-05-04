@@ -540,6 +540,7 @@ def load_data():
         data_df = pd.concat([data_df, file_df], axis=1)
 
     data_df = data_df.sort_index()
+    data_df = data_df.fillna(method='ffill')
 
     # Aqui se cambia la definicion de caso recuperado a todos los casos 14 dias
     # despues de ser diagnosticados (deberian ser 10?)
