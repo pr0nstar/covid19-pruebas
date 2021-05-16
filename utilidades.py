@@ -526,6 +526,7 @@ def load_data():
 
         file_df = file_df.rename(ADM1_NAME, axis=1)
         file_df.index = pd.to_datetime(file_df.index)
+        file_df.index = file_df.index - pd.Timedelta(days=1)
 
         file_df = file_df[COLUMNS_ORDER]
         file_df.columns = pd.MultiIndex.from_product([
