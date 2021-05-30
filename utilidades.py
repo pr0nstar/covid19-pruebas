@@ -519,6 +519,17 @@ def load_data():
             header=[0, 1]
         )
 
+        try:
+            file_patch_df = pd.read_csv(
+                remote_path('raw/paho/{}.timeline.daily.patch.csv'.format(file)),
+                index_col=[0],
+                header=[0, 1]
+            )
+
+            file_df.update(file_patch_df)
+        except pd.io.parsers.EmptyDataError:
+            pass
+
         file_df.columns.names = ['', '']
         file_df.index.name = ''
 
