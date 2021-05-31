@@ -2,7 +2,8 @@ numpy
 scipy
 pandas
 beautifulsoup4
-xlrd
+xlrd==1.2.0
+unidecode
 openpyxl
 statsmodels
 seaborn
