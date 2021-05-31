@@ -3,10 +3,12 @@ scipy
 pandas
 beautifulsoup4
 xlrd
+openpyxl
 statsmodels
 seaborn
 geopandas
 peakutils
+pantab
 pygithub
 notebook
 nbconvert
