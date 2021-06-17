@@ -9,7 +9,7 @@ statsmodels
 seaborn
 geopandas
 peakutils
-pantab
+dataframe_image
 pygithub
 notebook
 nbconvert
