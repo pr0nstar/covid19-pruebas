@@ -5,6 +5,7 @@ beautifulsoup4
 xlrd==1.2.0
 unidecode
 openpyxl
+sklearn
 statsmodels
 seaborn
 geopandas
