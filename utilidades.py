@@ -4,6 +4,7 @@ import scipy
 import scipy.integrate
 import scipy.stats
 
+import os
 import io
 import csv
 import json
@@ -645,7 +646,7 @@ def open_mobility_file():
         )
         data_link = data_link.attrs['href']
         if not data_link.startswith('http'):
-            data_link = MOVEMENT_BASE_URL + data_link
+            data_link = os.path.join(MOVEMENT_BASE_URL, data_link)
 
         data_container = requests.get(data_link, stream=True)
         data_container = ZipFile(io.BytesIO(data_container.content))
