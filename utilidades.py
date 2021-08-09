@@ -644,7 +644,8 @@ def open_mobility_file():
             _ for _ in links if 'href' in _.attrs and _.attrs['href'].endswith('zip')
         )
         data_link = data_link.attrs['href']
-        data_link = MOVEMENT_BASE_URL + data_link if data_link.startswith('/') else data_link
+        if not data_link.startswith('http'):
+            data_link = MOVEMENT_BASE_URL + data_link
 
         data_container = requests.get(data_link, stream=True)
         data_container = ZipFile(io.BytesIO(data_container.content))
