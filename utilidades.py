@@ -467,28 +467,26 @@ def remote_path(path):
 
 def load_testing_data():
     testing_data = pd.read_csv(
-        remote_path('processed/bolivia/testing.csv')
+        remote_path('processed/bolivia/testing.csv'), index_col=0, header=None
     )
-    testing_data_columns = [
-        idx.lower() for idx in testing_data.columns[1:] if 'Unnamed' not in idx
-    ]
-    testing_data_idx = pd.MultiIndex.from_product([
-        testing_data_columns, testing_data.iloc[0].reset_index()[1:][0].unique()
-    ])
 
-    testing_data['Fecha'] = pd.to_datetime(testing_data['Fecha'])
-    testing_data = testing_data.set_index('Fecha')
+    testing_data_idx = pd.MultiIndex.from_frame(
+        testing_data.iloc[:2].T.fillna(method='ffill').applymap(
+            lambda _: _.lower() if _ else _
+        )
+    )
 
-    testing_data = testing_data.iloc[1:]
     testing_data.columns = testing_data_idx
+    testing_data = testing_data.iloc[2:]
+
+    testing_data.index = pd.to_datetime(testing_data.index)
 
     testing_data = testing_data.astype(np.float32)
     testing_data = testing_data.interpolate(method='linear', limit_area='inside')
-    testing_data = testing_data.swaplevel(axis=1).sort_index(level=0, axis=1)
 
     return (
-        testing_data['Sospechosos'][testing_data_columns],
-        testing_data['Descartados'][testing_data_columns]
+        testing_data.xs('sospechosos', axis=1, level=1),
+        testing_data.xs('descartados', axis=1, level=1)
     )
 
 CASES_DATA_NAME = {
