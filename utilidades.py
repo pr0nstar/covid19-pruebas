@@ -526,7 +526,7 @@ def load_data():
             )
 
             file_df.update(file_patch_df)
-        except pd.io.parsers.EmptyDataError:
+        except:
             pass
 
         file_df.columns.names = ['', '']
