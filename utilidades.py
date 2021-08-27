@@ -517,6 +517,7 @@ def load_data():
             index_col=[0],
             header=[0, 1]
         )
+        file_df.index = pd.to_datetime(file_df.index)
 
         try:
             file_patch_df = pd.read_csv(
@@ -524,7 +525,11 @@ def load_data():
                 index_col=[0],
                 header=[0, 1]
             )
+            file_patch_df.index = pd.to_datetime(file_patch_df.index)
 
+            file_df = file_df.reindex(
+                sorted(np.unique(np.concatenate([file_df.index, file_patch_df.index])))
+            )
             file_df.update(file_patch_df)
         except:
             pass
@@ -535,7 +540,6 @@ def load_data():
         file_df = file_df['BOL']
 
         file_df = file_df.rename(ADM1_NAME, axis=1)
-        file_df.index = pd.to_datetime(file_df.index)
         file_df.index = file_df.index - pd.Timedelta(days=1)
 
         file_df = file_df[COLUMNS_ORDER]
