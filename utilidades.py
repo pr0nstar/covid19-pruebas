@@ -127,8 +127,7 @@ def estimate_rt(
 #             seasonal_periods=7,
             trend='mul', seasonal=None, damped=True
         ).fit(
-            use_basinhopping=True,
-            smoothing_level=smooth_seasons
+            method='bh', smoothing_level=smoothing_level
         )
         new_cases = fit.fittedvalues
 
