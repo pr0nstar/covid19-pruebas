@@ -127,7 +127,7 @@ def estimate_rt(
 #             seasonal_periods=7,
             trend='mul', seasonal=None, damped=True
         ).fit(
-            method='bh', smoothing_level=smoothing_level
+            method='bh', smoothing_level=smooth_seasons
         )
         new_cases = fit.fittedvalues
 
