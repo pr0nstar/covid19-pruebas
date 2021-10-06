@@ -91,7 +91,7 @@ def fast_smoothing(arr, smoothing_level=.2, window_size=0):
     fit = ExponentialSmoothing(
         arr, trend='mul', seasonal=None, damped=True
     ).fit(
-        use_basinhopping=True, smoothing_level=smoothing_level
+        method='bh', smoothing_level=smoothing_level
     )
     arr = fit.fittedvalues
     arr[mask] = 0
