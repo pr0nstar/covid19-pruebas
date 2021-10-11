@@ -11,6 +11,7 @@ import json
 import datetime
 import os.path
 import requests
+import unidecode
 import itertools as it
 import unicodedata
 import shutil
@@ -450,9 +451,9 @@ def do_process_label(label):
         'ascii', 'ignore'
     ).decode("utf-8").lower()
 
-def remote_path(path):
+def remote_path(path, repo='pr0nstar/covid19-data'):
     git = Github()
-    repo = git.get_repo('pr0nstar/covid19-data')
+    repo = git.get_repo(repo)
 
     base_path = os.path.dirname(path)
     base_name = os.path.basename(path)
@@ -488,6 +489,37 @@ def load_testing_data():
         testing_data.xs('descartados', axis=1, level=1)
     )
 
+patch_foronda = {
+    'confirmados': 'confirmados_acumulados.csv',
+    'decesos': 'decesos_acumulados.csv'
+}
+COLUMNS_ORDER = [
+    'la paz', 'cochabamba', 'santa cruz', 'oruro', 'potosi',
+    'tarija', 'chuquisaca', 'beni', 'pando'
+]
+def load_patch_foronda():
+    fpatch = pd.DataFrame([])
+    
+    for patch_key, patch_file in patch_foronda.items():
+        patch_df = pd.read_csv(
+            remote_path(patch_file, repo='mauforonda/covid19-bolivia-udape'),
+            index_col=0
+        )
+        
+        patch_df.index = pd.to_datetime(patch_df.index)
+        patch_df = patch_df.sort_index()
+        patch_df = patch_df.loc['2021-09-23':]
+
+        patch_df.columns = [unidecode.unidecode(_).lower() for _ in patch_df.columns]
+        patch_df = patch_df[COLUMNS_ORDER]
+        patch_df.columns = pd.MultiIndex.from_product([
+            [patch_key], patch_df.columns
+        ])
+        
+        fpatch = pd.concat([fpatch, patch_df], axis=1)
+        
+    return fpatch
+
 CASES_DATA_NAME = {
     'confirmed': 'confirmados',
     'deaths': 'decesos'
@@ -503,10 +535,6 @@ ADM1_NAME = {
     'BO-S': 'santa cruz',
     'BO-T': 'tarija'
 }
-COLUMNS_ORDER = [
-    'la paz', 'cochabamba', 'santa cruz', 'oruro', 'potosi',
-    'tarija', 'chuquisaca', 'beni', 'pando'
-]
 def load_data():
     data_df = pd.DataFrame([])
 
@@ -562,6 +590,16 @@ def load_data():
 
     data_df = data_df.sort_index()
     data_df = data_df.fillna(method='ffill')
+
+    fpatch = load_patch_foronda()
+    fpatch = pd.concat([
+        data_df.loc[['2021-09-23']],
+        fpatch.diff().dropna(how='all')
+    ]).cumsum()
+
+    data_df = pd.concat([
+        data_df.loc[:'2021-09-22'], fpatch
+    ])
 
     # Aqui se cambia la definicion de caso recuperado a todos los casos 14 dias
     # despues de ser diagnosticados (deberian ser 10?)
