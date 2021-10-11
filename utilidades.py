@@ -452,8 +452,11 @@ def do_process_label(label):
     ).decode("utf-8").lower()
 
 def remote_path(path, repo='pr0nstar/covid19-data'):
-    git = Github()
-    repo = git.get_repo(repo)
+    try:
+        git = Github(os.getenv('GH_TOKEN'))
+        repo = git.get_repo(repo)
+    except:
+        raise Exception('ERROR in github\'s remote_path')
 
     base_path = os.path.dirname(path)
     base_name = os.path.basename(path)
