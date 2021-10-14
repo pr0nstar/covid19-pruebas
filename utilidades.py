@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+
 import scipy
 import scipy.integrate
 import scipy.stats
@@ -37,6 +38,7 @@ from zipfile import ZipFile
 
 np.warnings.filterwarnings('ignore')
 warnings.simplefilter('ignore', ConvergenceWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 def run(model_fn, model_data, days, acc_days=0,  step=0.1, **params):
     if type(days) is not list:
