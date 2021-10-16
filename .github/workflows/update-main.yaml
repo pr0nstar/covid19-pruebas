@@ -1,7 +1,7 @@
-name: Update graphs
+name: Update main graphs
 on:
   schedule:
-    - cron: '0 23 * * *'
+    - cron: '0 17 * * *'
 jobs:
   update:
     name: update data
@@ -23,7 +23,7 @@ jobs:
       - name: run notebooks
         id: run_notebooks
         run: |
-          find ./extra/*.ipynb | xargs -I'{}' jupyter nbconvert --to notebook --inplace --execute '{}'
+          jupyter nbconvert --to notebook --inplace --execute 0_general.ipynb
       - name: git status
         id: git-status
         run: |
