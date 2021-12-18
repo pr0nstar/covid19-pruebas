@@ -105,7 +105,7 @@ def fast_smoothing(arr, smoothing_level=.2, window_size=0):
         smooth = lowess(
             endog=arr.values,
             exog=np.array(range(len(arr))),
-            frac=window_size/len(new_cases),
+            frac=window_size/len(arr),
             it=0,
             delta=0.0,
             is_sorted=True,
