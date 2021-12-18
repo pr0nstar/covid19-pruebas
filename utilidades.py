@@ -31,6 +31,8 @@ from types import MethodType
 import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 from statsmodels.tsa.api import ExponentialSmoothing
+from statsmodels.tsa.holtwinters import SimpleExpSmoothing
+from statsmodels.nonparametric.smoothers_lowess import lowess
 
 from github import Github
 from bs4 import BeautifulSoup
@@ -91,8 +93,8 @@ def moving_average(arr, by):
 def fast_smoothing(arr, smoothing_level=.2, window_size=0):
     mask = (arr == 0)
     arr[mask] = 1
-    fit = ExponentialSmoothing(
-        arr, trend='mul', seasonal=None, damped=True
+    fit = SimpleExpSmoothing(
+        arr
     ).fit(
         method='bh', smoothing_level=smoothing_level
     )
@@ -100,13 +102,25 @@ def fast_smoothing(arr, smoothing_level=.2, window_size=0):
     arr[mask] = 0
 
     if window_size:
-        return moving_average(arr, window_size)
+        smooth = lowess(
+            endog=arr.values,
+            exog=np.array(range(len(arr))),
+            frac=window_size/len(new_cases),
+            it=0,
+            delta=0.0,
+            is_sorted=True,
+            missing='raise',
+            return_sorted=False
+        )
+
+        if type(smooth) == pd.Series:
+            arr = pd.Series(smooth, index=arr.index)
 
     return arr
 
 def estimate_rt(
     new_cases,
-    periodo_incubacion=5.2,
+    periodo_incubacion=5.,
     infectivity_profile=None,
     window_size=0,
     smooth_seasons=.4
@@ -125,10 +139,8 @@ def estimate_rt(
     no_cases_mask = new_cases < 1
     new_cases[no_cases_mask] = 1
     if smooth_seasons > 0:
-        fit = ExponentialSmoothing(
-            new_cases,
-#             seasonal_periods=7,
-            trend='mul', seasonal=None, damped=True
+        fit = SimpleExpSmoothing(
+            new_cases
         ).fit(
             method='bh', smoothing_level=smooth_seasons
         )
@@ -137,7 +149,17 @@ def estimate_rt(
     new_cases[no_cases_mask] = 0
 
     if window_size > 0:
-        new_cases = moving_average(new_cases, window_size)
+        smooth = lowess(
+            endog=new_cases.values,
+            exog=new_cases.index,
+            frac=window_size/len(new_cases),
+            it=0,
+            delta=0.0,
+            is_sorted=True,
+            missing='raise',
+            return_sorted=False
+        )
+        new_cases = pd.Series(smooth, index=new_cases.index)
 
     new_cases = new_cases.tolist()
     new_cases.append(0)
@@ -504,13 +526,13 @@ COLUMNS_ORDER = [
 ]
 def load_patch_foronda():
     fpatch = pd.DataFrame([])
-    
+
     for patch_key, patch_file in patch_foronda.items():
         patch_df = pd.read_csv(
             remote_path(patch_file, repo='mauforonda/covid19-bolivia-udape'),
             index_col=0
         )
-        
+
         patch_df.index = pd.to_datetime(patch_df.index)
         patch_df = patch_df.sort_index()
         patch_df = patch_df.loc['2021-09-23':]
@@ -520,9 +542,9 @@ def load_patch_foronda():
         patch_df.columns = pd.MultiIndex.from_product([
             [patch_key], patch_df.columns
         ])
-        
+
         fpatch = pd.concat([fpatch, patch_df], axis=1)
-        
+
     return fpatch
 
 CASES_DATA_NAME = {
