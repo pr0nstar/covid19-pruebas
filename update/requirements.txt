@@ -3,6 +3,7 @@ scipy
 pandas
 beautifulsoup4
 unidecode
+xlrd
 openpyxl
 sklearn
 statsmodels
