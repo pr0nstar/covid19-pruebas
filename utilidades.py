@@ -494,27 +494,17 @@ def remote_path(path, repo='pr0nstar/covid19-data'):
 
 def load_testing_data():
     testing_data = pd.read_csv(
-        remote_path('processed/bolivia/testing.csv'), index_col=0, header=None
+        remote_path('descartados.csv', repo='sociedatos/covid19-bo-pruebas_por_departamento'),
+        index_col=0
     )
 
-    testing_data_idx = pd.MultiIndex.from_frame(
-        testing_data.iloc[:2].T.fillna(method='ffill').applymap(
-            lambda _: _.lower() if _ else _
-        )
-    )
-
-    testing_data.columns = testing_data_idx
-    testing_data = testing_data.iloc[2:]
-
+    testing_data.columns = [_.lower() for _ in testing_data.columns]
     testing_data.index = pd.to_datetime(testing_data.index)
 
     testing_data = testing_data.astype(np.float32)
     testing_data = testing_data.interpolate(method='linear', limit_area='inside')
 
-    return (
-        testing_data.xs('sospechosos', axis=1, level=1),
-        testing_data.xs('descartados', axis=1, level=1)
-    )
+    return testing_data
 
 patch_foronda = {
     'confirmados': 'confirmados_acumulados.csv',
@@ -529,7 +519,7 @@ def load_patch_foronda():
 
     for patch_key, patch_file in patch_foronda.items():
         patch_df = pd.read_csv(
-            remote_path(patch_file, repo='mauforonda/covid19-bolivia-udape'),
+            remote_path(patch_file, repo='sociedatos/covid19-bo-casos_por_departamento'),
             index_col=0
         )
 
@@ -646,12 +636,7 @@ def load_data():
     data_df = pd.concat([data_df, recovered_cases], axis=1)
 
     # Testing
-    pending, discarded = load_testing_data()
-
-    pending.columns = pd.MultiIndex.from_product([
-        ['sospechosos'], pending.columns
-    ])
-    data_df = pd.concat([data_df, pending], axis=1)
+    discarded = load_testing_data()
 
     discarded.columns = pd.MultiIndex.from_product([
         ['descartados'], discarded.columns
@@ -663,7 +648,6 @@ def load_data():
         'decesos': 'death',
         'activos': 'active_cases',
         'recuperados': 'recovered',
-        'sospechosos': 'pending',
         'descartados': 'discarded'
     }, axis=1)
 
