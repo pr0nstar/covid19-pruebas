@@ -91,6 +91,9 @@ def moving_average(arr, by):
     )[:-pad]
 
 def fast_smoothing(arr, smoothing_level=.2, window_size=0):
+    if type(data_x) == pd.Series and arr.isna().any():
+        arr = arr.interpolate()
+        
     mask = (arr == 0)
     arr[mask] = 1
     fit = SimpleExpSmoothing(
@@ -504,7 +507,7 @@ def load_testing_data():
     testing_data = testing_data.astype(np.float32)
     testing_data = testing_data.interpolate(method='linear', limit_area='inside')
 
-    return testing_data
+    return testing_data.iloc[:, :-1]
 
 patch_foronda = {
     'confirmados': 'confirmados_acumulados.csv',
