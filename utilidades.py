@@ -91,9 +91,9 @@ def moving_average(arr, by):
     )[:-pad]
 
 def fast_smoothing(arr, smoothing_level=.2, window_size=0):
-    if type(data_x) == pd.Series and arr.isna().any():
+    if type(arr) == pd.Series and arr.isna().any():
         arr = arr.interpolate()
-        
+
     mask = (arr == 0)
     arr[mask] = 1
     fit = SimpleExpSmoothing(
