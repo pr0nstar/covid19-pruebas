@@ -528,7 +528,7 @@ def load_patch_foronda():
 
         patch_df.index = pd.to_datetime(patch_df.index)
         patch_df = patch_df.sort_index()
-        patch_df = patch_df.loc['2021-09-23':]
+        patch_df = patch_df.loc['2020-10-07':]
 
         patch_df.columns = [unidecode.unidecode(_).lower() for _ in patch_df.columns]
         patch_df = patch_df[COLUMNS_ORDER]
@@ -613,12 +613,12 @@ def load_data():
 
     fpatch = load_patch_foronda()
     fpatch = pd.concat([
-        data_df.loc[['2021-09-23']],
+        data_df.loc[['2020-10-07']],
         fpatch.diff().dropna(how='all')
     ]).cumsum()
 
     data_df = pd.concat([
-        data_df.loc[:'2021-09-22'], fpatch
+        data_df.loc[:'2020-10-06'], fpatch
     ])
 
     # Aqui se cambia la definicion de caso recuperado a todos los casos 14 dias
