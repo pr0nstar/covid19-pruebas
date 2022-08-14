@@ -625,6 +625,7 @@ def load_data():
     # despues de ser diagnosticados (deberian ser 10?)
     active_cases = data_df['confirmados'].diff().rolling(window=14).sum()
     active_cases = active_cases.fillna(data_df['confirmados'])
+    active_cases[active_cases < 0] = 0
     active_cases.columns = pd.MultiIndex.from_product([
         ['activos'], active_cases.columns
     ])
